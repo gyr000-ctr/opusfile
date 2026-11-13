@@ -236,6 +236,10 @@ struct OggOpusFile{
   int                gain_type;
   /*The offset to apply to the gain.*/
   opus_int32         gain_offset_q8;
+  /*Whether the computed gain is applied to decoded output (non-zero) or
+     bypassed entirely (0), in which case the decoder is programmed with a
+     gain of 0.*/
+  int                gain_enabled;
   /*Internal state for soft clipping and dithering float->short output.*/
 #if !defined(OP_FIXED_POINT)
 # if defined(OP_SOFT_CLIP)
@@ -255,5 +259,14 @@ struct OggOpusFile{
 };
 
 int op_strncasecmp(const char *_a,const char *_b,int _n);
+
+/*Compute the total requested gain for the given link, in 1/256ths of a dB,
+   from the gain type, the user-supplied offset, and the header/tag gains.
+  The result is not clamped.*/
+opus_int32 op_gain_compute(const OggOpusFile *_of,int _li);
+/*Clamp a gain in 1/256ths of a dB to the valid range [-32768,32767].
+  If _clamped is not NULL, * _clamped is set to non-zero if the value was
+   out of range and had to be clamped, or 0 otherwise.*/
+opus_int32 op_gain_clamp(opus_int32 _gain_q8,int *_clamped);
 
 #endif

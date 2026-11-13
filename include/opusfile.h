@@ -1839,6 +1839,42 @@ void op_set_decode_callback(OggOpusFile *_of,
 int op_set_gain_offset(OggOpusFile *_of,
  int _gain_type,opus_int32 _gain_offset_q8) OP_ARG_NONNULL(1);
 
+/**Sets whether or not the computed gain is applied to decoded output.
+   By default, gain application is enabled: the gain selected by
+    op_set_gain_offset() (the header gain, unless changed) is applied during
+    decoding.
+   When disabled, the decoder is programmed with a gain of 0, so the output
+    samples are exactly the ones produced by the decoder for the unmodified
+    stream, with no gain scaling of any kind.
+   The gain is applied by the decoder itself while filling the output buffer,
+    so toggling this flag does not introduce any additional buffering or
+    copying of the decoded samples.
+   \note As with op_set_gain_offset(), the new setting will not be applied to
+    any already buffered, decoded output.
+   \param _of      The \c OggOpusFile on which to enable or disable gain
+                    application.
+   \param _enabled A non-zero value to apply the gain, or 0 to bypass it.*/
+void op_set_gain_enabled(OggOpusFile *_of,int _enabled) OP_ARG_NONNULL(1);
+
+/**Returns whether or not the computed gain is currently applied to decoded
+    output.
+   \param _of The \c OggOpusFile to query.
+   \return Non-zero if gain application is enabled, or 0 if it is bypassed.*/
+int op_gain_enabled(const OggOpusFile *_of) OP_ARG_NONNULL(1);
+
+/**Gets the effective gain that is (or would be) applied to decoded output
+    for the current link.
+   This is the total gain selected by op_set_gain_offset() (including header
+    gain and/or track gain, if applicable), clamped to the valid range of
+    [-32768,32767]/256 dB, or 0 if gain application has been disabled with
+    op_set_gain_enabled().
+   \param _of          The \c OggOpusFile to query.
+   \param[out] _clamped If not \c NULL, this is set to a non-zero value when
+                         the requested gain was out of range and had to be
+                         clamped, or 0 otherwise.
+   \return The effective gain, in 1/256ths of a dB.*/
+opus_int32 op_get_gain(const OggOpusFile *_of,int *_clamped) OP_ARG_NONNULL(1);
+
 /**Sets whether or not dithering is enabled for 16-bit decoding.
    By default, when <tt>libopusfile</tt> is compiled to use floating-point
     internally, calling op_read() or op_read_stereo() will first decode to

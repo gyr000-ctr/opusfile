@@ -135,25 +135,43 @@ int main(int _argc,const char **_argv){
   OggOpusFile  *of;
   ogg_int64_t   duration;
   unsigned char wav_header[44];
+  const char   *path;
+  opus_int32    gain_offset_q8;
+  int           gain_offset_set;
+  int           gain_enabled;
   int           ret;
   int           is_ssl;
   int           output_seekable;
+  int           ai;
 #if defined(_WIN32)
   win32_utf8_setup(&_argc,&_argv);
 #endif
-  if(_argc!=2){
-    fprintf(stderr,"Usage: %s <file.opus>\n",_argv[0]);
+  gain_enabled=1;
+  gain_offset_set=0;
+  path=NULL;
+  for(ai=1;ai<_argc;ai++){
+    if(strcmp(_argv[ai],"--no-gain")==0)gain_enabled=0;
+    else if(strncmp(_argv[ai],"--gain-offset=",14)==0){
+      gain_offset_q8=(opus_int32)strtol(_argv[ai]+14,NULL,0);
+      gain_offset_set=1;
+    }
+    else if(path==NULL)path=_argv[ai];
+    else break;
+  }
+  if(path==NULL||ai<_argc){
+    fprintf(stderr,
+     "Usage: %s [--no-gain] [--gain-offset=<q8>] <file.opus>\n",_argv[0]);
     return EXIT_FAILURE;
   }
   is_ssl=0;
-  if(strcmp(_argv[1],"-")==0){
+  if(strcmp(path,"-")==0){
     OpusFileCallbacks cb={NULL,NULL,NULL,NULL};
     of=op_open_callbacks(op_fdopen(&cb,fileno(stdin),"rb"),&cb,NULL,0,&ret);
   }
   else{
     OpusServerInfo info;
     /*Try to treat the argument as a URL.*/
-    of=op_open_url(_argv[1],&ret,OP_GET_SERVER_INFO(&info),NULL);
+    of=op_open_url(path,&ret,OP_GET_SERVER_INFO(&info),NULL);
 #if 0
     if(of==NULL){
       OpusFileCallbacks  cb={NULL,NULL,NULL,NULL};
@@ -165,7 +183,7 @@ int main(int _argc,const char **_argv){
       of=op_open_callbacks(fp,&cb,NULL,0,NULL);
     }
 #else
-    if(of==NULL)of=op_open_file(_argv[1],&ret);
+    if(of==NULL)of=op_open_file(path,&ret);
 #endif
     else{
       if(info.name!=NULL){
@@ -199,8 +217,26 @@ int main(int _argc,const char **_argv){
     }
   }
   if(of==NULL){
-    fprintf(stderr,"Failed to open file '%s': %i\n",_argv[1],ret);
+    fprintf(stderr,"Failed to open file '%s': %i\n",path,ret);
     return EXIT_FAILURE;
+  }
+  /*Apply any gain-related options and report the effective gain.
+    The gain itself is applied by the decoder while filling the output
+     buffer, so this adds no extra buffering or copying.*/
+  if(gain_offset_set){
+    ret=op_set_gain_offset(of,OP_ABSOLUTE_GAIN,gain_offset_q8);
+    if(ret<0)fprintf(stderr,"Failed to set gain offset: %i\n",ret);
+  }
+  if(!gain_enabled)op_set_gain_enabled(of,0);
+  {
+    opus_int32 effective_q8;
+    int        clamped;
+    effective_q8=op_get_gain(of,&clamped);
+    fprintf(stderr,"Gain application: %s\n",
+     op_gain_enabled(of)?"enabled":"DISABLED (decoder gain forced to 0)");
+    fprintf(stderr,"Effective gain: %.2f dB%s\n",effective_q8/256.0,
+     clamped?" (requested gain was out of range; clamped to [-128,128) dB)"
+     :"");
   }
   duration=0;
   output_seekable=fseek(stdout,0,SEEK_CUR)!=-1;
@@ -255,7 +291,7 @@ int main(int _argc,const char **_argv){
         continue;
       }
       else if(ret<0){
-        fprintf(stderr,"\nError decoding '%s': %i\n",_argv[1],ret);
+        fprintf(stderr,"\nError decoding '%s': %i\n",path,ret);
         if(is_ssl)fprintf(stderr,"Possible truncation attack?\n");
         ret=EXIT_FAILURE;
         break;

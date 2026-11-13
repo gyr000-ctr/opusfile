@@ -1,0 +1,15 @@
+Gain application: enabled
+Effective gain: -6.00 dB
+Total number of links: 1
+Total duration: 3.000s (144000 samples @ 48 kHz)
+Total size: 44.7k
+Decoding link 0:                          
+  Channels: 2
+  Duration: 3.000s (144000 samples @ 48 kHz)
+  Size: 44.7k
+  Original sampling rate: 48000 Hz
+  Encoded by: libopus 1.6.1, libopusenc 0.3
+  ENCODER=opusenc from opus-tools 0.2
+
+ 15.4k  0s  (282 kbps)                     29.8k  1s  (118 kbps)                     44.2k  2s  (118 kbps)                    
+Done: played 3.000s (144000 samples @ 48 kHz).

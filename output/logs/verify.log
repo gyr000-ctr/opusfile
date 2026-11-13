@@ -1,0 +1,50 @@
+=== [1/6] Build check ===
+Usage: /home/gyr/feedback/uid5248/build/opusfile_example [--no-gain] [--gain-offset=<q8>] <file.opus>
+=== [2/6] Make material with large loudness differences ===
+patched output_gain=-1536 q8 (-6.00 dB) -> gain_m6.opus
+patched output_gain=1024 q8 (+4.00 dB) -> gain_p4.opus
+patched output_gain=3584 q8 (+14.00 dB) -> gain_p14.opus
+patched output_gain=0 q8 (+0.00 dB) -> gain_0.opus
+=== [3/6] Gain ON: energies align ===
+  gain_m6: RMS = -19.019 dBFS  (Effective gain: -6.00 dB)
+  gain_p4: RMS = -19.013 dBFS  (Effective gain: 4.00 dB)
+  gain_p14: RMS = -19.008 dBFS  (Effective gain: 14.00 dB)
+  spread after gain: 0.011 dB (target < 0.2 dB)
+  PASS: energies aligned
+=== [3b] Gain OFF: original loudness differences remain ===
+  gain_m6: RMS = -13.019 dBFS  (Gain application: DISABLED (decoder gain forced to 0))
+  gain_p4: RMS = -23.013 dBFS  (Gain application: DISABLED (decoder gain forced to 0))
+  gain_p14: RMS = -33.008 dBFS  (Gain application: DISABLED (decoder gain forced to 0))
+=== [4/6] Gain OFF: samples bit-identical to ungained decode ===
+  PASS: cmp reports zero differences (off_p4.wav == on_g0.wav)
+=== [5/6] Out-of-range gain: clamped and reported ===
+Effective gain: 128.00 dB (requested gain was out of range; clamped to [-128,128) dB)
+Effective gain: -128.00 dB (requested gain was out of range; clamped to [-128,128) dB)
+  PASS: +98303 q8 clamped to 32767 q8 and reported
+  PASS: -98302 q8 clamped to -32768 q8 and reported
+Effective gain: 10.00 dB
+  PASS: in-range gain not flagged
+=== [6/6] No extra copy: gain shares the decode output buffer ===
+static void op_update_gain(OggOpusFile *_of){
+  opus_int32 gain_q8;
+  int        li;
+  /*If decode isn't ready, then we'll apply the gain when we initialize the
+     decoder.*/
+  if(_of->ready_state<OP_INITSET)return;
+  li=_of->seekable?_of->cur_link:0;
+  /*When gain application is disabled, bypass the header/tag/offset gains
+     entirely and decode exactly as captured.*/
+  gain_q8=_of->gain_enabled?op_gain_compute(_of,li):0;
+  gain_q8=op_gain_clamp(gain_q8,NULL);
+  OP_ASSERT(_of->od!=NULL);
+#if defined(OPUS_SET_GAIN)
+  opus_multistream_decoder_ctl(_of->od,OPUS_SET_GAIN(gain_q8));
+#else
+/*A fallback that works with both float and fixed-point is a bunch of work,
+   so just force people to use a sufficiently new version.
+  This is deployed well enough at this point that this shouldn't be a burden.*/
+# error "libopus 1.0.1 or later required"
+#endif
+}
+  PASS: gain applied via OPUS_SET_GAIN inside decode; no second full copy
+ALL CHECKS PASSED

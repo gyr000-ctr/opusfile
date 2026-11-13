@@ -1309,38 +1309,16 @@ static int op_bisect_forward_serialno(OggOpusFile *_of,
 }
 
 static void op_update_gain(OggOpusFile *_of){
-  OpusHead   *head;
-  opus_int32  gain_q8;
-  int         li;
+  opus_int32 gain_q8;
+  int        li;
   /*If decode isn't ready, then we'll apply the gain when we initialize the
      decoder.*/
   if(_of->ready_state<OP_INITSET)return;
-  gain_q8=_of->gain_offset_q8;
   li=_of->seekable?_of->cur_link:0;
-  head=&_of->links[li].head;
-  /*We don't have to worry about overflow here because the header gain and
-     track gain must lie in the range [-32768,32767], and the user-supplied
-     offset has been pre-clamped to [-98302,98303].*/
-  switch(_of->gain_type){
-    case OP_ALBUM_GAIN:{
-      int album_gain_q8;
-      album_gain_q8=0;
-      opus_tags_get_album_gain(&_of->links[li].tags,&album_gain_q8);
-      gain_q8+=album_gain_q8;
-      gain_q8+=head->output_gain;
-    }break;
-    case OP_TRACK_GAIN:{
-      int track_gain_q8;
-      track_gain_q8=0;
-      opus_tags_get_track_gain(&_of->links[li].tags,&track_gain_q8);
-      gain_q8+=track_gain_q8;
-      gain_q8+=head->output_gain;
-    }break;
-    case OP_HEADER_GAIN:gain_q8+=head->output_gain;break;
-    case OP_ABSOLUTE_GAIN:break;
-    default:OP_ASSERT(0);
-  }
-  gain_q8=OP_CLAMP(-32768,gain_q8,32767);
+  /*When gain application is disabled, bypass the header/tag/offset gains
+     entirely and decode exactly as captured.*/
+  gain_q8=_of->gain_enabled?op_gain_compute(_of,li):0;
+  gain_q8=op_gain_clamp(gain_q8,NULL);
   OP_ASSERT(_of->od!=NULL);
 #if defined(OPUS_SET_GAIN)
   opus_multistream_decoder_ctl(_of->od,OPUS_SET_GAIN(gain_q8));
@@ -1520,6 +1498,9 @@ static int op_open1(OggOpusFile *_of,
   memset(_of,0,sizeof(*_of));
   if(OP_UNLIKELY(_initial_bytes>(size_t)LONG_MAX))return OP_EFAULT;
   _of->end=-1;
+  /*Gain application defaults to enabled, preserving the historical behavior
+     of applying the header gain.*/
+  _of->gain_enabled=1;
   _of->stream=_stream;
   _of->callbacks=*_cb;
   /*At a minimum, we need to be able to read data.*/
@@ -2765,6 +2746,23 @@ int op_set_gain_offset(OggOpusFile *_of,
   _of->gain_offset_q8=OP_CLAMP(-98302,_gain_offset_q8,98303);
   op_update_gain(_of);
   return 0;
+}
+
+void op_set_gain_enabled(OggOpusFile *_of,int _enabled){
+  _of->gain_enabled=!!_enabled;
+  op_update_gain(_of);
+}
+
+int op_gain_enabled(const OggOpusFile *_of){
+  return _of->gain_enabled;
+}
+
+opus_int32 op_get_gain(const OggOpusFile *_of,int *_clamped){
+  opus_int32 gain_q8;
+  int        li;
+  li=_of->seekable?_of->cur_link:0;
+  gain_q8=_of->gain_enabled?op_gain_compute(_of,li):0;
+  return op_gain_clamp(gain_q8,_clamped);
 }
 
 void op_set_dither_enabled(OggOpusFile *_of,int _enabled){
