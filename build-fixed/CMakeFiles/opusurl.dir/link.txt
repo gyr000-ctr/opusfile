@@ -1,0 +1,2 @@
+/usr/bin/ar qc libopusurl.a CMakeFiles/opusurl.dir/src/http.c.o CMakeFiles/opusurl.dir/src/internal.c.o
+/usr/bin/ranlib libopusurl.a

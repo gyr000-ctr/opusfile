@@ -38,6 +38,8 @@ cmake_pop_check_state()
 
 add_library(opusfile
   "${CMAKE_CURRENT_SOURCE_DIR}/include/opusfile.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/gain.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/gain.h"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/info.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/internal.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/internal.h"

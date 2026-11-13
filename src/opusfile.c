@@ -19,6 +19,7 @@
 #endif
 
 #include "internal.h"
+#include "gain.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -1340,10 +1341,17 @@ static void op_update_gain(OggOpusFile *_of){
     case OP_ABSOLUTE_GAIN:break;
     default:OP_ASSERT(0);
   }
-  gain_q8=OP_CLAMP(-32768,gain_q8,32767);
+  /*The common gain layer owns the legal-range clamp and the clamp report.*/
+  gain_q8=op_gain_clamp(_of,gain_q8);
+  _of->gain_applied_q8=gain_q8;
   OP_ASSERT(_of->od!=NULL);
 #if defined(OPUS_SET_GAIN)
-  opus_multistream_decoder_ctl(_of->od,OPUS_SET_GAIN(gain_q8));
+  /*When the software gain layer is enabled it applies the gain itself, so the
+     decoder is told to apply none and emits the raw samples.
+    With the layer disabled (the default), hand the gain to the decoder exactly
+     as the legacy path did, keeping that path bit-identical.*/
+  opus_multistream_decoder_ctl(_of->od,
+   OPUS_SET_GAIN(_of->gain_enabled?0:gain_q8));
 #else
 /*A fallback that works with both float and fixed-point is a bunch of work,
    so just force people to use a sufficiently new version.
@@ -2767,6 +2775,27 @@ int op_set_gain_offset(OggOpusFile *_of,
   return 0;
 }
 
+int op_set_gain_enabled(OggOpusFile *_of,int _enabled){
+  _of->gain_enabled=_enabled!=0;
+  /*Re-route the gain between the decoder and the software layer.
+    op_update_gain() is a no-op until the decoder is initialized, in which case
+     the chosen routing takes effect automatically when it is.*/
+  op_update_gain(_of);
+  return 0;
+}
+
+opus_int64 op_gain_clamp_count(const OggOpusFile *_of){
+  return _of->gain_clamp_count;
+}
+
+int op_gain_clamp_last(const OggOpusFile *_of,
+ opus_int32 *_requested_q8,opus_int32 *_applied_q8){
+  if(_of->gain_clamp_count<=0)return OP_FALSE;
+  if(_requested_q8!=NULL)*_requested_q8=_of->gain_last_requested_q8;
+  if(_applied_q8!=NULL)*_applied_q8=_of->gain_last_applied_q8;
+  return 1;
+}
+
 void op_set_dither_enabled(OggOpusFile *_of,int _enabled){
 #if !defined(OP_FIXED_POINT)
   _of->dither_disabled=!_enabled;
@@ -2827,6 +2856,17 @@ static int op_decode(OggOpusFile *_of,op_sample *_pcm,
      OP_DEC_USE_DEFAULT, fail.*/
   else if(OP_UNLIKELY(ret>0))return OP_EBADPACKET;
   if(OP_UNLIKELY(ret<0))return OP_EBADPACKET;
+  /*Apply the gain in place, on the same buffer the decoder just filled.
+    This is the single point every read path funnels through, so the samples
+     are scaled exactly once, with no additional full-size buffer or copy.
+    On success the buffer holds exactly _nsamples*_nchannels values, whether
+     they came from a decode callback (which signals success with a 0 return)
+     or the built-in decoder, so _nsamples is the correct count here.
+    When the layer is disabled or set to unity gain, we skip the loop entirely
+     and the output is identical to the legacy decoder-gain path.*/
+  if(_of->gain_enabled&&_of->gain_applied_q8!=0){
+    op_gain_apply(_of,_pcm,_nsamples,_nchannels);
+  }
   return ret;
 }
 

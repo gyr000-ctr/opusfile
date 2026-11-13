@@ -1,0 +1,14 @@
+fatal: No names found, cannot describe anything.
+CMake Warning at cmake/OpusFilePackageVersion.cmake:61 (message):
+  Could not get package version.
+Call Stack (most recent call first):
+  CMakeLists.txt:6 (get_package_version)
+
+
+-- Opus project version: 0.0
+-- Could NOT find Opus (missing: Opus_DIR)
+-- Checking for module 'opus'
+--   Found opus, version 1.6.1
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/gyr/feedback/uidreczz28Z2YVvaktw/build

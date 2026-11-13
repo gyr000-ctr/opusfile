@@ -1,0 +1,54 @@
+
+[1;36m========================================================
+  SECTION 0: Build opusfile with the new common gain layer (CMake)
+========================================================[0m
+[ 46%] Built target opusfile
+[ 84%] Built target opusfile_example
+
+[1;36m========================================================
+  SECTION 1: Repo entry point opusfile_example still works (default path)
+========================================================[0m
+Done: played 1.000s (48000 samples @ 48 kHz).
+wav bytes: 192044
+
+[1;36m========================================================
+  SECTION 2: Acceptance A - toggle OFF vs ON gives zero sample difference
+========================================================[0m
+identity: clamp_count off=0 on=0
+RESULT: sample-for-sample IDENTICAL (zero diff)
+
+[1;36m========================================================
+  SECTION 3: Acceptance B - out-of-range gain is clamped and reported
+========================================================[0m
+clamp: requested=40000 report=1 count=2 last_req=40000 last_applied=32767
+clamp: requested=-40000 report=1 count=2 last_req=-40000 last_applied=-32768
+clamp: requested=100 report=-1 count=0 last_req=0 last_applied=0
+
+[1;36m========================================================
+  SECTION 4: Acceptance C - unified gain aligns different-loudness materials
+========================================================[0m
+native  loudness gap: 25.099 dB
+aligned loudness gap: 0.001 dB (target RMS 0.25)
+aligned RMS: quiet=0.24998 loud=0.25001
+RESULT: energies aligned by per-file gains applied through the API
+
+[1;36m========================================================
+  SECTION 5: Acceptance D - no extra full copy (pointer identity, in place)
+========================================================[0m
+decode callback fills: 0x7fff908401d0
+caller output buffer : 0x7fff908401d0
+pointer identical    : YES (same allocation, no copy)
+in-place scale check : OK (0 bad of 648), factor=1.9952623
+
+[1;36m========================================================
+  SECTION 6: Fixed-point Q16 gain branch and default-path baseline equality
+========================================================[0m
+fixed-point samples: off=48000 on0=48000 on+6dB=48000
+energy off(0dB)=64494845647  on(0dB)=64494845647  identical=YES
+energy ratio +6dB/0dB = 3.98096 (expect 3.98107, err 2.84e-05)
+FIXED-POINT Q16 GAIN OK
+quiet: default path byte-identical to pristine baseline
+loud: default path byte-identical to pristine baseline
+stereo: default path byte-identical to pristine baseline
+
+[1;32mAll acceptance criteria verified. Artifacts in output/.[0m

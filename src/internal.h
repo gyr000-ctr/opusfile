@@ -236,6 +236,24 @@ struct OggOpusFile{
   int                gain_type;
   /*The offset to apply to the gain.*/
   opus_int32         gain_offset_q8;
+  /*Whether or not to apply the gain in the software gain layer.
+    When zero (the default), the gain is applied by libopus itself, exactly as
+     it was before the gain layer existed, and the decoded samples are
+     bit-identical to the legacy path.
+    When non-zero, the decoder's own gain is set to zero and the gain layer
+     scales the decoded output in place, reusing this same output buffer.*/
+  int                gain_enabled;
+  /*The gain currently in effect, in 1/256ths of a dB, after clamping.
+    This is the value converted to a linear factor by the gain layer.*/
+  opus_int32         gain_applied_q8;
+  /*The number of times a computed or requested gain had to be clamped to the
+     legal range.*/
+  opus_int64         gain_clamp_count;
+  /*The most recent gain request that had to be clamped, in 1/256ths of a dB,
+     and the clamped value that was applied instead.
+    These are only updated when gain_clamp_count increases.*/
+  opus_int32         gain_last_requested_q8;
+  opus_int32         gain_last_applied_q8;
   /*Internal state for soft clipping and dithering float->short output.*/
 #if !defined(OP_FIXED_POINT)
 # if defined(OP_SOFT_CLIP)

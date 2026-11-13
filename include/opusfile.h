@@ -1839,6 +1839,45 @@ void op_set_decode_callback(OggOpusFile *_of,
 int op_set_gain_offset(OggOpusFile *_of,
  int _gain_type,opus_int32 _gain_offset_q8) OP_ARG_NONNULL(1);
 
+/**Enables or disables the software gain layer.
+   By default (this flag is zero), the gain selected via op_set_gain_offset()
+    is applied inside the decoder, and decoded output is bit-identical to the
+    legacy behavior.
+   When enabled, the decoder's own gain is set to zero and the library applies
+    the gain itself, in place, on the same buffer the decoder wrote into, so no
+    second full-size copy of the output is made.
+   The total gain is always clamped to [-32768,32767]/256 dB, on both paths.
+   Clamp events can be queried with op_gain_clamp_count() and
+    op_gain_clamp_last().
+   \note As with op_set_gain_offset(), the change applies to subsequently
+    decoded packets, not to already buffered output.
+   \param _of      The \c OggOpusFile on which to toggle the gain layer.
+   \param _enabled A non-zero value to apply the gain in software, or 0 to let
+                    the decoder apply it (the default).
+   \return 0 on success.*/
+int op_set_gain_enabled(OggOpusFile *_of,int _enabled) OP_ARG_NONNULL(1);
+
+/**Returns the number of times a gain had to be clamped to the legal range of
+    [-32768,32767]/256 dB.
+   This counts clamps of the combined gain (header/track gain plus any offset)
+    on both the decoder and software gain paths.
+   \param _of The \c OggOpusFile to query.
+   \return The total number of clamp events, or a negative value on error.*/
+opus_int64 op_gain_clamp_count(const OggOpusFile *_of) OP_ARG_NONNULL(1);
+
+/**Reports the most recent gain value that had to be clamped.
+   \param[out] _requested_q8 The gain that was requested, in 1/256ths of a dB,
+                              before clamping.
+                              May be \c NULL.
+   \param[out] _applied_q8   The gain that was actually applied, after
+                              clamping to the legal range.
+                              May be \c NULL.
+   \param _of                The \c OggOpusFile to query.
+   \retval 1        A clamp had occurred and the values were returned.
+   \retval #OP_FALSE No clamp had occurred.*/
+int op_gain_clamp_last(const OggOpusFile *_of,
+ opus_int32 *_requested_q8,opus_int32 *_applied_q8) OP_ARG_NONNULL(1);
+
 /**Sets whether or not dithering is enabled for 16-bit decoding.
    By default, when <tt>libopusfile</tt> is compiled to use floating-point
     internally, calling op_read() or op_read_stereo() will first decode to

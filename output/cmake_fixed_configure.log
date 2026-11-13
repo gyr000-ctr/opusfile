@@ -1,0 +1,26 @@
+-- Found Git: /usr/bin/git (found version "2.53.0")
+fatal: No names found, cannot describe anything.
+CMake Warning at cmake/OpusFilePackageVersion.cmake:61 (message):
+  Could not get package version.
+Call Stack (most recent call first):
+  CMakeLists.txt:6 (get_package_version)
+
+
+-- Opus project version: 0.0
+-- The C compiler identification is GNU 15.2.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Could NOT find Opus (missing: Opus_DIR)
+-- Found PkgConfig: /usr/bin/pkg-config (found version "2.5.1")
+-- Checking for module 'opus'
+--   Found opus, version 1.6.1
+-- Looking for lrintf in m
+-- Looking for lrintf in m - found
+-- Looking for lrintf
+-- Looking for lrintf - found
+-- Configuring done (0.3s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/gyr/feedback/uidreczz28Z2YVvaktw/build-fixed

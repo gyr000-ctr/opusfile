@@ -9,6 +9,7 @@ opusinclude_HEADERS = include/opusfile.h
 
 lib_LTLIBRARIES = libopusfile.la libopusurl.la
 libopusfile_la_SOURCES = \
+	src/gain.c src/gain.h \
 	src/info.c \
 	src/internal.c src/internal.h \
 	src/opusfile.c src/stream.c

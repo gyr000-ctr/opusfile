@@ -1,0 +1,13 @@
+Total number of links: 1
+Total duration: 1.000s (48000 samples @ 48 kHz)
+Total size: 10.5k
+Decoding link 0:                          
+  Channels: 1
+  Duration: 1.000s (48000 samples @ 48 kHz)
+  Size: 10.5k
+  Original sampling rate: 48000 Hz
+  Encoded by: libopus 1.6.1, libopusenc 0.3
+  ENCODER=opusenc from opus-tools 0.2
+
+ 10.1k  0s  (188 kbps)                     10.5k  1s  (77.0 kbps)                    
+Done: played 1.000s (48000 samples @ 48 kHz).
