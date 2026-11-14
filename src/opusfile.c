@@ -567,9 +567,8 @@ static int op_fetch_headers_impl(OggOpusFile *_of,OpusHead *_head,
   }
 }
 
-static int op_fetch_headers(OggOpusFile *_of,OpusHead *_head,
- OpusTags *_tags,ogg_uint32_t **_serialnos,int *_nserialnos,
- int *_cserialnos,ogg_page *_og){
+static int op_fetch_headers(OggOpusFile *_of,OggOpusLink *_link,
+ ogg_uint32_t **_serialnos,int *_nserialnos,int *_cserialnos,ogg_page *_og){
   ogg_page og;
   int      ret;
   if(!_og){
@@ -582,11 +581,30 @@ static int op_fetch_headers(OggOpusFile *_of,OpusHead *_head,
     _og=&og;
   }
   _of->ready_state=OP_OPENED;
-  ret=op_fetch_headers_impl(_of,_head,_tags,_serialnos,_nserialnos,
-   _cserialnos,_og);
+  /*Initialize these now so the link can always be cleaned up safely, even if
+     we fail part-way through.*/
+  _link->pictures=NULL;
+  _link->npictures=0;
+  ret=op_fetch_headers_impl(_of,&_link->head,&_link->tags,_serialnos,
+   _nserialnos,_cserialnos,_og);
   /*Revert back from OP_STREAMSET to OP_OPENED on failure, to prevent
      double-free of the tags in an unseekable stream.*/
   if(OP_UNLIKELY(ret<0))_of->ready_state=OP_OPENED;
+  else{
+    /*Parse the METADATA_BLOCK_PICTURE tags (if any) now, so the picture data
+       is decoded exactly once and lives as long as the link itself.
+      Individual malformed or oversized pictures are skipped inside
+       op_pictures_parse(); only an allocation failure is fatal here.*/
+    ret=op_pictures_parse(&_link->pictures,&_link->npictures,&_link->tags);
+    if(OP_UNLIKELY(ret<0)){
+      /*Match the tag parse failure behavior above: the caller assumes the
+         tags are uninitialized on error.*/
+      opus_tags_clear(&_link->tags);
+      _link->pictures=NULL;
+      _link->npictures=0;
+      _of->ready_state=OP_OPENED;
+    }
+  }
   return ret;
 }
 
@@ -1272,7 +1290,7 @@ static int op_bisect_forward_serialno(OggOpusFile *_of,
       ret=op_seek_helper(_of,next);
       if(OP_UNLIKELY(ret<0))return ret;
     }
-    ret=op_fetch_headers(_of,&links[nlinks].head,&links[nlinks].tags,
+    ret=op_fetch_headers(_of,&links[nlinks],
      _serialnos,_nserialnos,_cserialnos,last!=next?NULL:&og);
     if(OP_UNLIKELY(ret<0))return ret;
     /*Mark the current link count so it can be cleaned up on error.*/
@@ -1472,6 +1490,14 @@ static int op_open_seekable2(OggOpusFile *_of){
   return OP_UNLIKELY(ret<0)?OP_EREAD:0;
 }
 
+/*Free the parsed pictures of a single link (if any) and reset its picture
+   state, so the link can be reused or safely cleaned up.*/
+static void op_link_clear_pictures(OggOpusLink *_link){
+  op_pictures_clear(_link->pictures,_link->npictures);
+  _link->pictures=NULL;
+  _link->npictures=0;
+}
+
 /*Clear out the current logical bitstream decoder.*/
 static void op_decode_clear(OggOpusFile *_of){
   /*We don't actually free the decoder.
@@ -1483,6 +1509,7 @@ static void op_decode_clear(OggOpusFile *_of){
   if(!_of->seekable){
     OP_ASSERT(_of->ready_state>=OP_INITSET);
     opus_tags_clear(&_of->links[0].tags);
+    op_link_clear_pictures(&_of->links[0]);
   }
   _of->ready_state=OP_OPENED;
 }
@@ -1495,13 +1522,17 @@ static void op_clear(OggOpusFile *_of){
   if(!_of->seekable){
     if(_of->ready_state>OP_OPENED||_of->ready_state==OP_PARTOPEN){
       opus_tags_clear(&links[0].tags);
+      op_link_clear_pictures(&links[0]);
     }
   }
   else if(OP_LIKELY(links!=NULL)){
     int nlinks;
     int link;
     nlinks=_of->nlinks;
-    for(link=0;link<nlinks;link++)opus_tags_clear(&links[link].tags);
+    for(link=0;link<nlinks;link++){
+      opus_tags_clear(&links[link].tags);
+      op_link_clear_pictures(&links[link]);
+    }
   }
   _ogg_free(links);
   _ogg_free(_of->serialnos);
@@ -1565,7 +1596,7 @@ static int op_open1(OggOpusFile *_of,
   for(;;){
     /*Fetch all BOS pages, store the Opus header and all seen serial numbers,
       and load subsequent Opus setup headers.*/
-    ret=op_fetch_headers(_of,&_of->links[0].head,&_of->links[0].tags,
+    ret=op_fetch_headers(_of,&_of->links[0],
      &_of->serialnos,&_of->nserialnos,&_of->cserialnos,pog);
     if(OP_UNLIKELY(ret<0))break;
     _of->nlinks=1;
@@ -1580,6 +1611,7 @@ static int op_open1(OggOpusFile *_of,
        og.
       We can't seek, so start processing the next link right now.*/
     opus_tags_clear(&_of->links[0].tags);
+    op_link_clear_pictures(&_of->links[0]);
     _of->nlinks=0;
     if(!seekable)_of->cur_link++;
     pog=&og;
@@ -1785,6 +1817,31 @@ const OpusTags *op_tags(const OggOpusFile *_of,int _li){
   return &_of->links[_li].tags;
 }
 
+/*Resolve a link index the same way op_tags() does.
+  Return: The resolved link index, or -1 if the tags for the requested link
+           are not available.*/
+static int op_resolve_tags_link(const OggOpusFile *_of,int _li){
+  if(OP_UNLIKELY(_li>=_of->nlinks))_li=_of->nlinks-1;
+  if(!_of->seekable){
+    if(_of->ready_state<OP_STREAMSET&&_of->ready_state!=OP_PARTOPEN)return -1;
+    _li=0;
+  }
+  else if(_li<0)_li=_of->ready_state>=OP_STREAMSET?_of->cur_link:0;
+  return _li;
+}
+
+int op_picture_count(const OggOpusFile *_of,int _li){
+  _li=op_resolve_tags_link(_of,_li);
+  if(_li<0)return 0;
+  return _of->links[_li].npictures;
+}
+
+const OpusPictureTag *op_picture(const OggOpusFile *_of,int _li,int _index){
+  _li=op_resolve_tags_link(_of,_li);
+  if(_li<0||_index<0||_index>=_of->links[_li].npictures)return NULL;
+  return &_of->links[_li].pictures[_index];
+}
+
 int op_current_link(const OggOpusFile *_of){
   if(OP_UNLIKELY(_of->ready_state<OP_OPENED))return OP_EINVAL;
   return _of->cur_link;
@@ -1957,8 +2014,7 @@ static int op_fetch_and_process_page(OggOpusFile *_of,
         do{
           /*We're streaming.
             Fetch the two header packets, build the info struct.*/
-          ret=op_fetch_headers(_of,&links[0].head,&links[0].tags,
-           NULL,NULL,NULL,&og);
+          ret=op_fetch_headers(_of,&links[0],NULL,NULL,NULL,&og);
           if(OP_UNLIKELY(ret<0))return ret;
           /*op_find_initial_pcm_offset() will suppress any initial hole for us,
              so no need to set _ignore_holes.*/

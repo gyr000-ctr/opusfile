@@ -18,6 +18,7 @@ option(OP_DISABLE_FLOAT_API "Disable floating-point API" OFF)
 option(OP_FIXED_POINT "Enable fixed-point calculation" OFF)
 option(OP_ENABLE_ASSERTIONS "Enable assertions in code" OFF)
 option(OP_DISABLE_EXAMPLES "Do not build example applications" OFF)
+option(OP_DISABLE_TESTS "Do not build tests" OFF)
 option(OP_DISABLE_DOCS "Do not build API documentation" OFF)
 
 include(GNUInstallDirs)
@@ -261,6 +262,24 @@ if(NOT OP_DISABLE_EXAMPLES)
       $<$<C_COMPILER_ID:Clang,GNU>:-Wno-long-long>
       $<$<C_COMPILER_ID:Clang,GNU>:-fvisibility=hidden>
   )
+endif()
+
+if(NOT OP_DISABLE_TESTS)
+  enable_testing()
+  add_executable(test_pictures
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_pictures.c"
+  )
+  target_include_directories(test_pictures
+    PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  )
+  target_link_libraries(test_pictures
+    PRIVATE
+      opusfile
+      Ogg::ogg
+      Opus::opus
+  )
+  add_test(NAME test_pictures COMMAND test_pictures)
 endif()
 
 if(NOT OP_DISABLE_DOCS)

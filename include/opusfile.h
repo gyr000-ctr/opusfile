@@ -1558,6 +1558,50 @@ const OpusHead *op_head(const OggOpusFile *_of,int _li) OP_ARG_NONNULL(1);
             an invalid link.*/
 const OpusTags *op_tags(const OggOpusFile *_of,int _li) OP_ARG_NONNULL(1);
 
+/**Get the number of parsed pictures attached to the given link in a
+    (possibly chained) Ogg Opus stream.
+   Each <code>METADATA_BLOCK_PICTURE</code> tag in the link's comment header
+    is parsed once when the header is first read, and the results are cached
+    in the #OggOpusFile itself (the picture data is neither re-parsed nor
+    copied per call).
+   Tags with malformed BASE64, invalid picture block fields, or sizes above
+    the library's internal limits (at most 16&nbsp;MB of decoded data per
+    picture, 64&nbsp;MB total per link, 16384&times;16384 pixels, 64 bits per
+    pixel, and 128 pictures per link) are silently skipped, but do not affect
+    the remaining tags, which are still available via op_tags() and this
+    function.
+   \param _of The \c OggOpusFile from which to retrieve the picture count.
+   \param _li The index of the link whose pictures should be counted.
+              Use a negative number to get the picture count of the current
+               link.
+              For an unseekable stream, \a _li is ignored, and the picture
+               count for the current link is always returned, if available.
+   \return The number of valid pictures attached to the given link.
+           This may be less than the number of
+            <code>METADATA_BLOCK_PICTURE</code> tags in the comment header if
+            some of them were malformed or exceeded the size limits.*/
+int op_picture_count(const OggOpusFile *_of,int _li) OP_ARG_NONNULL(1);
+
+/**Get a parsed picture attached to the given link in a (possibly chained)
+    Ogg Opus stream.
+   The returned structure is owned by the #OggOpusFile: it remains valid
+    until op_free() is called on the stream (or, for an unseekable stream,
+    until decoding advances to the next link), and must not be modified or
+    freed by the application.
+   \param _of    The \c OggOpusFile from which to retrieve the picture.
+   \param _li    The index of the link whose picture should be retrieved.
+                 Use a negative number to get a picture from the current
+                  link.
+                 For an unseekable stream, \a _li is ignored, and the picture
+                  from the current link is always returned, if available.
+   \param _index The index of the picture within the link, from 0 (inclusive)
+                  to the value returned by op_picture_count() (exclusive).
+   \return The parsed picture data, or <code>NULL</code> if \a _index is out
+            of range or the pictures for the requested link are not
+            available.*/
+const OpusPictureTag *op_picture(const OggOpusFile *_of,int _li,int _index)
+ OP_ARG_NONNULL(1);
+
 /**Retrieve the index of the current link.
    This is the link that produced the data most recently read by
     op_read_float() or its associated functions, or, after a seek, the link

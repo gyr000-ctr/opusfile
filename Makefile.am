@@ -26,6 +26,11 @@ if OP_ENABLE_EXAMPLES
 noinst_PROGRAMS = examples/opusfile_example examples/seeking_example
 endif
 
+check_PROGRAMS = tests/test_pictures
+TESTS = tests/test_pictures
+tests_test_pictures_SOURCES = tests/test_pictures.c
+tests_test_pictures_LDADD = libopusfile.la $(DEPS_LIBS)
+
 examples_opusfile_example_SOURCES = examples/opusfile_example.c
 examples_seeking_example_SOURCES = examples/seeking_example.c
 examples_opusfile_example_LDADD = libopusurl.la libopusfile.la

@@ -150,7 +150,41 @@ struct OggOpusLink{
   OpusHead     head;
   /*The contents of the comment header.*/
   OpusTags     tags;
+  /*The parsed METADATA_BLOCK_PICTURE tags from the comment header.
+    These are parsed once when the comment header is fetched and are owned by
+     this link, so their lifetime is bound to the enclosing OggOpusFile.*/
+  OpusPictureTag *pictures;
+  /*The number of entries in the pictures array.*/
+  int             npictures;
 };
+
+/*The maximum decoded size of a single picture, in bytes.
+  Pictures whose BASE64-encoded tag decodes to more than this are ignored.*/
+# define OP_PICTURE_SIZE_MAX (16<<20)
+/*The maximum total decoded size of all pictures in a single link, in bytes.
+  Once this budget is exhausted, remaining pictures are ignored.*/
+# define OP_PICTURE_TOTAL_SIZE_MAX (64<<20)
+/*The maximum number of pictures kept from a single link.*/
+# define OP_PICTURE_COUNT_MAX (128)
+/*The maximum declared width or height of a picture, in pixels.*/
+# define OP_PICTURE_DIM_MAX (16384)
+/*The maximum declared color depth of a picture, in bits per pixel.*/
+# define OP_PICTURE_DEPTH_MAX (64)
+
+/*Parse all METADATA_BLOCK_PICTURE tags in _tags into a newly allocated array
+   of OpusPictureTag structures.
+  Individual tags that are malformed, use more than OP_PICTURE_SIZE_MAX bytes
+   of decoded data, declare dimensions or a color depth above the limits, or
+   would exceed the OP_PICTURE_TOTAL_SIZE_MAX or OP_PICTURE_COUNT_MAX budgets
+   are silently skipped; the remaining tags are still parsed.
+  On success, returns 0 and stores the array (or NULL if there were no valid
+   pictures) in *_pictures and its length in *_npictures.
+  On allocation failure, frees everything and returns OP_EFAULT.*/
+int op_pictures_parse(OpusPictureTag **_pictures,int *_npictures,
+ const OpusTags *_tags);
+/*Free an array of _npictures OpusPictureTag structures allocated by
+   op_pictures_parse().*/
+void op_pictures_clear(OpusPictureTag *_pictures,int _npictures);
 
 struct OggOpusFile{
   /*The callbacks used to access the stream.*/

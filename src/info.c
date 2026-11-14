@@ -789,3 +789,105 @@ void opus_picture_tag_clear(OpusPictureTag *_pic){
   _ogg_free(_pic->mime_type);
   _ogg_free(_pic->data);
 }
+
+/*Check that a NUL-terminated MIME type string contains only printable ASCII
+   characters (0x20-0x7E), as required by the METADATA_BLOCK_PICTURE
+   specification.*/
+static int op_picture_mime_type_valid(const char *_mime_type){
+  const unsigned char *p;
+  for(p=(const unsigned char *)_mime_type;*p!='\0';p++){
+    if(*p<0x20||*p>0x7E)return 0;
+  }
+  return 1;
+}
+
+void op_pictures_clear(OpusPictureTag *_pictures,int _npictures){
+  if(_pictures!=NULL){
+    int pi;
+    for(pi=0;pi<_npictures;pi++)opus_picture_tag_clear(_pictures+pi);
+    _ogg_free(_pictures);
+  }
+}
+
+int op_pictures_parse(OpusPictureTag **_pictures,int *_npictures,
+ const OpusTags *_tags){
+  OpusPictureTag *pictures;
+  size_t          total_size;
+  int             ncomments;
+  int             npictures;
+  int             ci;
+  pictures=NULL;
+  npictures=0;
+  total_size=0;
+  ncomments=_tags->comments;
+  for(ci=0;ci<ncomments;ci++){
+    const char *comment;
+    size_t      tag_length;
+    size_t      decoded_sz;
+    comment=_tags->user_comments[ci];
+    if(opus_tagncompare("METADATA_BLOCK_PICTURE",22,comment)!=0)continue;
+    comment+=23;
+    /*Reject malformed or oversized tags before attempting to decode them.
+      A valid BASE64 encoding has a length that is a multiple of 4 and decodes
+       to at most 3 bytes per 4 characters.*/
+    tag_length=strlen(comment);
+    if(tag_length==0||(tag_length&3)!=0)continue;
+    decoded_sz=tag_length>>2;
+    if(decoded_sz>(OP_PICTURE_SIZE_MAX+2)/3)continue;
+    decoded_sz=3*decoded_sz;
+    if(comment[tag_length-1]=='=')decoded_sz--;
+    if(comment[tag_length-2]=='=')decoded_sz--;
+    if(decoded_sz>OP_PICTURE_SIZE_MAX
+     ||decoded_sz>OP_PICTURE_TOTAL_SIZE_MAX-total_size){
+      continue;
+    }
+    if(npictures>=OP_PICTURE_COUNT_MAX)break;
+    {
+      OpusPictureTag pic;
+      int            ret;
+      ret=opus_picture_tag_parse(&pic,comment);
+      /*Skip malformed BASE64 or picture blocks.*/
+      if(ret==OP_ENOTFORMAT)continue;
+      if(OP_UNLIKELY(ret<0)){
+        op_pictures_clear(pictures,npictures);
+        return OP_EFAULT;
+      }
+      /*Validate the fields the parser does not check: the MIME type must be
+         printable ASCII, and the dimensions and color depth must be sane.
+        The parser fills in width/height/depth from the image data itself when
+         it recognizes the format, so this also catches lies in the declared
+         fields of JPEG/PNG/GIF images.*/
+      if(!op_picture_mime_type_valid(pic.mime_type)
+       ||pic.width>OP_PICTURE_DIM_MAX||pic.height>OP_PICTURE_DIM_MAX
+       ||pic.depth>OP_PICTURE_DEPTH_MAX
+       ||pic.data_length>OP_PICTURE_SIZE_MAX){
+        opus_picture_tag_clear(&pic);
+        continue;
+      }
+      /*This should not be able to fail given the count limit above, but check
+         for overflow anyway.*/
+      if(OP_UNLIKELY((size_t)npictures+1>
+       (size_t)INT_MAX/sizeof(*pictures))){
+        opus_picture_tag_clear(&pic);
+        op_pictures_clear(pictures,npictures);
+        return OP_EFAULT;
+      }
+      {
+        OpusPictureTag *new_pictures;
+        new_pictures=(OpusPictureTag *)_ogg_realloc(pictures,
+         sizeof(*pictures)*(npictures+1));
+        if(OP_UNLIKELY(new_pictures==NULL)){
+          opus_picture_tag_clear(&pic);
+          op_pictures_clear(pictures,npictures);
+          return OP_EFAULT;
+        }
+        pictures=new_pictures;
+      }
+      pictures[npictures++]=*&pic;
+      total_size+=pic.data_length;
+    }
+  }
+  *_pictures=pictures;
+  *_npictures=npictures;
+  return 0;
+}
